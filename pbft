@@ -1,0 +1,22 @@
+pre_prepare(@Peer,View,NewN,D)  -: client_request(Operation,TimeStamp,Client,Primary), peers(Node,Peer), state(View,Log,Node,NodeId), Sequence(N), Node==Primary, NewN:=N+1, D:=digest(Operation,TimeStamp,Client,Primary), add("request",Operation,TimeStamp,Client,Primary,D,Log).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+prepare(@Peer,View1,N,D,Node) -: peers(Node,Peer), pre_prepare(@Peer,View1,N,D), state(View2,Log,Node,NodeId), sequence_range(h,H), Node==Peer, View1==View2, check(View1,D,Log)==False, N>h, N<H,add("pre-prepare",View1,D,Log), add("prepare",View1,D,Node,Log).
