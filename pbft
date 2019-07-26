@@ -1,4 +1,7 @@
-pre_prepare(@Peer,View,NewN,D)  -: client_request(Operation,TimeStamp,Client,Primary), peers(Node,Peer), state(View,Log,Node,NodeId), Sequence(N), Node==Primary, NewN:=N+1, D:=digest(Operation,TimeStamp,Client,Primary), add("request",Operation,TimeStamp,Client,Primary,D,Log).
+/*Tihs is just normal operation*/
+
+pre_prepare(@Peer,View,NewN,D)  -: client_request(Operation,TimeStamp,Client,Primary), peers(Node,Peer), state(View,Node,NodeId), Sequence(N), Node==Primary, NewN:=N+1, D=pack(Operation,TimeStamp,Client,Primary).
+log("request",View,D,Primary,NewN) -: client_request(Operation,TimeStamp,Client,Primary), D=pack(Operation,TimeStamp,Client,Primary).
 
 
 
@@ -19,4 +22,17 @@ pre_prepare(@Peer,View,NewN,D)  -: client_request(Operation,TimeStamp,Client,Pri
 
 
 
-prepare(@Peer,View1,N,D,Node) -: peers(Node,Peer), pre_prepare(@Peer,View1,N,D), state(View2,Log,Node,NodeId), sequence_range(h,H), Node==Peer, View1==View2, check(View1,D,Log)==False, N>h, N<H,add("pre-prepare",View1,D,Log), add("prepare",View1,D,Node,Log).
+prepare(@Peer,View1,N,D,Node) -: peers(Node,Peer), pre_prepare(@Peer,View1,N,D), state(View2,Node,NodeId), sequence_range(h,H), Node==Peer, View1==View2, not log(_,View1,_,_,N), N>h, N<H.
+log("pre-prepare",View1,D,Node,N) -: pre_prepare(@Peer,View1,N,D), state(View2,Node,NodeId), sequence_range(h,H), Node==Peer, View1==View2, not log("pre-prepare",View1,_,_,N), N>h, N<H.
+log("prepare",View1,D,Node,N) -: pre_prepare(@Peer,View1,N,D), state(View2,Node,NodeId), sequence_range(h,H), Node==Peer, View1==View2, not log("prepare",View1,_,_,N), N>h, N<H.
+
+log("prepare",View1,D,Node,N) -: prepare(@Peer,View1,N,D,Node), state(View2,Log,Node,NodeId),sequence_range(h,H),View1==View2, N>h, N<H.
+
+prepare_cnt(D,View,N,count<Node>) -: log("prepare",View,D,Node,N).
+
+
+prepared(D,View,N,Node) -: prepare_cnt(D,View,N,NodeCnt), log("pre-prepare",View,D,_,N), state(View,Node,NodeId),number_of_node(Number),NodeCnt>=(Number-1)*2/3.
+
+commit()                        -: peers(Node,Peer), prepared(D,View,N,Node)
+
+
