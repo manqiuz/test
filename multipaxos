@@ -1,2 +1,40 @@
-// This is the election process of the chubby using multipaxos
-//to be filled
+/*This is the election process of chubby using multipaxos*/
+total_cnt(Node,count<Peer>) :- peers(Node,Peer),state(Node,View).
+prepare(@Peer, Time, Node) :- peers(Node,Peer), state(Node,View), master_lease(Master,LeaseStart),system_time(Time),Time-LeaseStart==10.
+state(Node,NewView) :- state(Node,View), master_lease(Master,LeaseStart),system_time(Time),Time-LeaseStart==10,NewView=View+1.
+
+promise(@Peer,TimeStamp,AccTimeStamp,AccNode,Node) :- prepare(@Node, TimeStamp, Peer), state(Node, View), promised(Promised), max_pre_acc(AccTimeStamp,AccNode,View), TimeStamp>Promised,TimeStamp>AccTimeStamp.
+promise(@Peer,TimeStamp,Null,Null,Node) :- prepare(@Node, TimeStamp, Peer,View), state(Node, View), promised(Promised), not max_pre_acc(_,_,View), TimeStamp>Promised.
+max_pre_acc(max<AccTimeStamp>,Master,View) :- pre_acc(AccTimeStamp,Master,View),state(Node,View).
+state(Node, NewPromised) :- prepare(@Node, TimeStamp, Peer), state(Node, View), pre_acc(TimeStamp,Master), TimeStamp>Promised, NewPromised:=TimeStamp.
+
+promise_cnt(Node,TimeStamp,count<Peer>) :- promise(@Node,TimeStamp,AccTimeStamp,AccNode,Peer), state(Node,View).
+max_promise_n(TimeStamp, max<AccTimeStamp>) :- promise(@Peer,TimeStamp,AccTimeStamp,_,_).
+max_promise_value(TimeStamp,AccNode) :- max_promise_n(TimeStamp, Max), promise(@Node,TimeStamp,Max,AccNode,Peer),
+propose(TimeStamp, AccNode  ) :-peers(Node,Peer), promise_cnt(Node,TimeStamp,NumOfPromise), total_cnt(Node,NumOfNodes),max_promise_value(TimeStamp,AccNode), NumOfPromise>NumOfNodes/2+1.
+propose(TimeStamp,  ) :-peers(Node,Peer), promise_cnt(Node,TimeStamp,NumOfPromise), total_cnt(Node,NumOfNodes), not max_promise_value(TimeStamp,_),NumOfPromise>NumOfNodes/2+1.
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
