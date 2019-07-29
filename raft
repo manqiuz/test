@@ -1,0 +1,106 @@
+//raft
+
+
+//input:client_message(@Leader,Message,Client)
+
+//output:output(@Client,Message) 
+//match(N1,N2)
+//node(Node,Id) log(Log,CommitIndex) state(State,CurrentTerm,VotedFor,T0,T1) 
+//sysTime(Time)
+//heartbeat(T3,T4)(T1 is initialized as system time, T2 is much shorter than any server's period)
+//input client_message(@N,Entry,Client)
+//output node(Log)
+//most_recent_leader(Leader)
+
+
+
+
+
+
+
+
+/*leader election*/
+/***************************************************************************************************************************/
+//count the number of node
+node_cnt(count<N2>) :- match(N1,N2),node(Node,Id),N1==Node.
+
+//election timeout(a follower becomes candidate and votes for itself)
+state(NewState,NewCurrentTerm,NewVotedFor,T0,NewT1) :- sysTime(Time),state(State,CurrentTerm,VotedFor,T0,T1),node(Node,Id),Time-T1>=T0,State=="follower",NewCurrentTerm:=CurrentTerm+1,NewState:="candidate",NewVotedFor:=Id,NewT1:=Time.
+
+//candidate sends requestVote to other node
+requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate) :- sysTime(Time),state(State,CurrentTerm,VotedFor,T0,T1),node(Node,Id),match(N1,N2),N1==Node,log(Log,CommitIndex),State=="candidate",Term:=CurrentTerm+1,Time-T1>=T0,CandidateId:=Id,LastLogIndex:=f_len(Log)-1,LastLogTerm:=f_last_term(Log),Candidate:=N1.  
+
+//follower's reply and update
+
+//false
+reply(@Node,NewTerm,VoteGranted) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate), N2==Node, Term<CurrentTerm,VoteGranted:=false,NewTerm:=CurrentTerm,Node:=Candidate.
+
+//true,the log of candidate is at least as up-to-date as the follower, and the follower updates itself
+reply(@Node,Term,VoteGranted,Peer) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate), N2==Node, Term>CurrentTerm,State=="follower",LastLogTerm>f_last_term(Log),VoteGranted:=true,Node:=Candidate,Peer:=Node.
+state(State,Term,NewVotedFor,T0,NewT1) :- sysTime(Time),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate), N2==Node, Term>=CurrentTerm,State=="follower",VotedFor==-1,LastLogTerm>f_last_term(Log),NewT1:=Time,NewVotedFor:=CandidateId.
+reply(@Node,Term,VoteGranted,Peer) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate), N2==Node, Term>CurrentTerm,State=="follower",LastLogTerm==f_last_term(Log),LastLogIndex>=f_len(Log)-1,VoteGranted:=true,Node:=Candidate,Peer:=Node.
+state(State,Term,NewVotedFor,T0,NewT1) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),requestVote(@N2,Term,CandidateId,LastLogIndex,LastLogTerm,Candidate), N2==Node, Term>=CurrentTerm,State=="follower",VotedFor==-1,LastLogTerm==f_last_term(Log),LastLogIndex>=f_len(Log)-1,NewT1:=Time,NewVotedFor:=CandidateId.
+
+
+//candidate reactions(win, recognize other leaders, restart when timeout)
+vote_cnt(Node,count<Peer>,CurrentTerm) :- reply(Candidate,Term,VoteGranted,Peer),state(State,CurrentTerm,VotedFor,T0,T1),node(Node,Id),State=="candidate",Node==Candidate,Term==CurrentTerm,VoteGranted==true.
+state(NewState,CurrentTerm,VotedFor,T0,T1) :- state(State,CurrentTerm,VotedFor,T0,T1),vote_cnt(Candidate,trueCnt,Term),node_cnt(Total), trueCnt>=Total/2+1,Term==CurrentTerm, Node==Candidate,State=="candidate",NewState:="leader".
+state_leader(N2,NextIndex,MatchIndex):-  state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),node(Node,Id),match(N1,N2),vote_cnt(Candidate,trueCnt,Term),node_cnt(Total),Term==CurrentTerm,trueCnt>=Total/2+1,N1==Candidate,State=="candidate",NextIndex:=f_len(Log),MatchIndex:=0.
+heartbeat(T3,T4):- sysTime(Time),state(State,CurrentTerm,VotedFor,T0,T1),vote_cnt(Candidate,trueCnt,Term),node_cnt(Total), trueCnt>=Total/2+1,Term==CurrentTerm,State=="candidate",T3:=Time.
+
+
+state(NewState,NewCurrentTerm,NewVotedFor,T0,NewT1) :- state(State,CurrentTerm,VotedFor,T0,T1),sysTime(Time),node(Node,Id),append_entry(@Peer,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,IsHeartBeat),Peer==Node,State=="candidate", Term>CurrentTerm, NewState:="follower",NewT1:=Time,NewTerm:=Term,NewVotedFor:=-1.
+ 
+state(NewState,NewCurrentTerm,NewVotedFor,T0,NewT1) :- sysTime(Time),state(State,CurrentTerm,VotedFor,T0,T1),Time-T1>=T0,State=="candidate",NewCurrentTerm:=CurrentTerm+1,NewVotedFor:=Id,NewT1:=Time.
+
+/************************************************************************************************************************/
+
+//log replication
+
+// follower transfer the client message to leader
+client_message(@Leader,Message,Client):- client_message(@N,Message,Client),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),most_recent_leader(Leader), N==Node,State=="follower".
+
+//leader accepts client message and appends entry 
+node(Node,Id,CurrentTerm,State,VotedFor,NewLog,T0,T1,CommitIndex):-client_message(@N,Message,Client),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),N==Node,State=="leader",NewLog:=f_append_entry(Message,CurrentTerm,Log).
+
+//Heartbeat 
+append_entry(@N2,Id,Node,Term,PrevLogIndex,PreLogTerm,LeaderCommit,NULL,IsHeartBeat) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),match(N1,N2),heartbeat(T3,T4),sysTime(Time),Time-T3>=T4,State=="leader",N1==Node,Term:=CurrentTerm,PrevLogIndex:=0 ,PreLogTerm:=0,LeaderCommit:=CommitIndex,IsHeartBeat:=true.
+heartbeat(NewT3,T4) :- node(Node,Id),heartbeat(T3,T4),state(State,CurrentTerm,VotedFor,T0,T1),sysTime(Time),Time-T3>=T4,State=="leader",NewT3:=Time.
+
+//last log index ≥ nextIndex for a follower,leader send append entry (non-empty)
+append_entry(@N2,Id,Node,CurrentTerm,PrevLogIndex,PreLogTerm,CommitIndex,Entry,IsHeartBeat) :- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),match(N1,N2),state_leader(N2,NextIndex,MatchIndex),N1==Node,State=="leader",f_len(Log)-1>=NextIndex,PrevLogIndex:=NextIndex-1,PreLogTerm:=f_term(NextIndex-1,Log),Entry:=f_extract_entry(NextIndex,Log),IsHeartBeat:=false.
+
+//reply of followers(false/true)
+reply_append_entry(@Leader,NewTerm,Success,Follower):- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term<CurrentTerm,NewTerm:=CurrentTerm,Success:=false,Follower:=N2. 
+reply_append_entry(@Leader,Term,Success,Follower):- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term>=CurrentTerm,f_match_log(PrevLogIndex,PreLogTerm,Log)==false,Success:=false,Follower:=N2. 
+reply_append_entry(@Leader,Term,Success,Follower):- node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),log(Log,CommitIndex),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term>=CurrentTerm,f_match_log(PrevLogIndex,PreLogTerm,Log)==true,Success:=true,Follower:=N2. 
+
+//followers reset time, append entry,set commitIndex
+state(State,Term,VotedFor,T0,NewT1) :- sysTime(Time),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term>=CurrentTerm, Entry==NULL,IsHeartBeat==true,NewT1:=Time.
+log(NewLog,NewCommitIndex) :- sysTime(Time),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term>=CurrentTerm, IsHeartBeat==false,f_match_log(PrevLogIndex,PreLogTerm,Log)==true,NewLog:=f_trun_n_append(Log,PrevLogIndex,Entry),NewCommitIndex:=f_min(LeaderCommit,PrevLogIndex).
+state(State,CurrentTerm,VotedFor,T0,NewT1) :- sysTime(Time),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),append_entry(@N2,LeaderID,Leader,Term,PrevLogIndex,PreLogTerm,LeaderCommit,Entry,IsHeartBeat),N2==Node,Term>=CurrentTerm, IsHeartBeat==false,f_match_log(PrevLogIndex,PreLogTerm,Log)==true,NewT1:=Time.
+
+//leader receives reply
+
+state_leader(N2,NewNextIndex,NewMatchIndex) :- reply_append_entry(@Leader,Term,Success,Follower),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),state_leader(N2,NextIndex,MatchIndex),Leader==Node,Success==true,State=="leader",N2==Follower，Term==CurrentTerm,NewNextIndex：=NextIndex+1,NewMatchIndex:=MatchIndex+1.
+state_leader(N2,NewNextIndex,NewMatchIndex) :- reply_append_entry(@Leader,Term,Success,Follower),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),state_leader(N2,NextIndex,MatchIndex),Success==false,State=="leader",N2==Follower，Term==CurrentTerm, NewNextIndex：=NextIndex-1,NewMatchIndex:=MatchIndex.
+node(Node,Id,NewCurrentTerm,NewState,VotedFor,Log,T0,T1,CommitIndex) :- reply_append_entry(@Leader,Term,Success,Follower),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),Node==Leader,Success==false,State=="leader",Term>CurrentTerm, NewCurrentTerm:=Term,NewState:="follower".
+
+              
+//count successful log replication
+cnt_succ(Leader,count<Follower>,Term) :- reply_append_entry(@Leader,Term,Success,Follower),node(Node,Id),state(State,CurrentTerm,VotedFor,T0,T1),State=="leader",Node==Leader,Term==CurrentTerm,Success==true.
+
+//commit and send message to client
+log(Log,NewCommitIndex):- cnt_succ(Leader,Success,CurrentTerm),node_cnt(Total),log(Log,NewCommitIndex),state(State,Term,VotedFor,T0,T1),Term==CurrentTerm,Success>=Total/2+1,node(Node,Id),Node==Leader,NewCommitIndex:=CommitIndex+1.
+output(@Client,"Complete",Time) :- cnt_succ(Leader,Success,CurrentTerm),sysTime(Time),state(State,Term,VotedFor,T0,T1),node_cnt(Total),Success>=Total/2+1,client(Client),Term==CurrentTerm.
+
+
+
+
+
+
+
+
+
+
+
