@@ -1,27 +1,26 @@
-/*This is the election process of chubby using multipaxos*/
-total_cnt(Node,count<Peer>) :- peers(Node,Peer),state(Node,View).
-prepare(@Peer, Time, Node) :- peers(Node,Peer), state(Node,View), master_lease(Master,LeaseStart),system_time(Time),Time-LeaseStart==10.
-state(Node,NewView) :- state(Node,View), master_lease(Master,LeaseStart),system_time(Time),Time-LeaseStart==10,NewView=View+1.
+/*This is the election process of chubby using multipaxos with master-lease*/
+total_cnt(Node,count<Peer>) :- peers(Node,Peer).
+prepare(@Peer, Time, Node) :- peers(Node,Peer), master_lease(Master,LeaseStart,LeaseLength,View),state(Node,View,InElect),system_time(Time),Master<>Node, Time-LeaseStart==LeaseLength.
+state(Node,NewView,NewInElect) :- state(Node,View,InElect), master_lease(Master,LeaseStart,LeaseLength,View),system_time(Time),Time-LeaseStart==LeaseLength,NewView:=Time, NewInElect:=True.
 
-promise(@Peer,TimeStamp,AccTimeStamp,AccNode,Node) :- prepare(@Node, TimeStamp, Peer), state(Node, View), promised(Promised), max_pre_acc(AccTimeStamp,AccNode,View), TimeStamp>Promised,TimeStamp>AccTimeStamp.
-promise(@Peer,TimeStamp,Null,Null,Node) :- prepare(@Node, TimeStamp, Peer,View), state(Node, View), promised(Promised), not max_pre_acc(_,_,View), TimeStamp>Promised.
-max_pre_acc(max<AccTimeStamp>,Master,View) :- pre_acc(AccTimeStamp,Master,View),state(Node,View).
-state(Node, NewPromised) :- prepare(@Node, TimeStamp, Peer), state(Node, View), pre_acc(TimeStamp,Master), TimeStamp>Promised, NewPromised:=TimeStamp.
+promise(@Peer,View,AccView,AccValue,Node) :- prepare(@Node, View, Peer), promised(Promised), state(Node,View,InElect),max_pre_acc(AccView,AccValue), View>Promised, InElect==True.
+max_pre_acc(max<AccView>,Master) :- pre_acc(AccView,Master).
+promised(NewPromised) :- prepare(@Node, View, Peer), promised(Promised),state(Node,View,InElect),View>Promised, InElect==True, NewPromised:=View.
 
-promise_cnt(Node,TimeStamp,count<Peer>) :- promise(@Node,TimeStamp,AccTimeStamp,AccNode,Peer), state(Node,View).
-max_promise_n(TimeStamp, max<AccTimeStamp>) :- promise(@Peer,TimeStamp,AccTimeStamp,_,_).
-max_promise_value(TimeStamp,AccNode) :- max_promise_n(TimeStamp, Max), promise(@Node,TimeStamp,Max,AccNode,Peer),
-propose(TimeStamp, AccNode  ) :-peers(Node,Peer), promise_cnt(Node,TimeStamp,NumOfPromise), total_cnt(Node,NumOfNodes),max_promise_value(TimeStamp,AccNode), NumOfPromise>NumOfNodes/2+1.
-propose(TimeStamp,  ) :-peers(Node,Peer), promise_cnt(Node,TimeStamp,NumOfPromise), total_cnt(Node,NumOfNodes), not max_promise_value(TimeStamp,_),NumOfPromise>NumOfNodes/2+1.
-
-
-
+promise_cnt(Node,View,count<Peer>) :- promise(@Node,View,AccView,AccNode,Peer), state(Node,View,_).
+max_promise_n(View, max<AccView>) :- promise(@Peer,View,AccView,_,_).
+max_promise_value(View,AccNode) :- max_promise_n(View, Max), promise(@Node,View,Max,AccNode,Peer),
+quorum(@Peer,Node,View) :- peers(Node,Peer), promise_cnt(Node,View,NumOfPromise), total_cnt(Node,NumOfNodes), NumOfPromise>NumOfNodes/2+1.
+master_lease(Node,Time,6,View)  :-  promise_cnt(Node,View,NumOfPromise), system_time(Time), total_cnt(Node,NumOfNodes), NumOfPromise>NumOfNodes/2+1.
+state(Node,View,NewInElect) :-  quorum(@Peer,Node,View), state(Node,View,InElect), NewInElect:=False.
+master_lease(Node,Time,10,View) :-	quorum(@Peer,Node,View), system_time(Time).
 
 
-
- 
-
-
+propose(@Peer, View, Node):- peers(Node,Peer), master_lease(Master,LeaseStart,LeaseLength,View),state(Node,View,InElect),system_time(Time),Master==Node,Time-LeaseStart==LeaseLength.
+accept(@Master,View,Peer) :- propose(@Peer, View, Master), state(Peer,View,InElect), InElect==False.
+master_lease(Master,Time,LeaseLength,View) :- propose(@Peer, View, Master), master_lease(Master,LeaseStart,LeaseLength,View), state(Peer,View,InElect), system_time(Time),InElect==False.
+accept_cnt(Master,View,count<Peer>) :- accept(@Master,View,Peer),state(Master,View,InElect).
+master_lease(Master,Time,LeaseLength,View) :- master_lease(Master,LeaseStart,LeaseLength,View),system_time(Time),accept_cnt(Master,View,NumOfAcc), state(Master,View,InElect),total_cnt(Master,NumOfNodes),NumOfAcc>NumOfNodes/2+1.
 
 
 
