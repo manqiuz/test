@@ -3,7 +3,7 @@ Input{
   prepare(Node, Int, Node),
   pre_vote(Node, Int, Int),
   max_id(Node,Id),
-  
+
   }
 
 Invented{
@@ -35,7 +35,7 @@ AggCountAcc(Int, Node),
 }
 
 Functor {
-fDiv(Int, Int)
+fDiv(Int, Int, Int)
     }
 Filter {
 fGt(Int, Int),
@@ -66,26 +66,17 @@ EDB{
   max_id(a,-1),
   max_id(b,-1),
   max_id(c,-1)
- 
-
-
-}
-IDB{
-commit(c, 3, "someupdate") 
-
-
-}
-
-EDB{
 
 
 
 }
 IDB{
-
+commit(c, 3, "someupdate")
 
 
 }
+
+
 }
 
 
@@ -104,7 +95,7 @@ max_id(Node,MaxView) :- id(Node,View), AggMaxId(MaxView,View).
 
 promise_cnt(Peer,View,Count) :- promise(Peer,View,OldView,Node), AggCountPromise(Count, Node).
 
-quorum(Master,View) :- promise_cnt(Master,View,NumOfPromises), total_cnt(Master,NumOfNodes), fGt(NumOfPromise,fDiv(NumOfNodes,2)).
+quorum(Master,View) :- promise_cnt(Master,View,NumOfPromises), total_cnt(Master,NumOfNodes), fDiv(half,NumOfNodes,2), fGt(NumOfPromise,half).
 
 propose(Peer, View, "someupdate", Master) :- promise(Master,View,OldUpdate,MaxOldView,Node), quorum(Master,View).
 
@@ -116,11 +107,10 @@ max_pre_vote(Peer, MaxView) :- pre_vote(Peer, View, Update), AggMaxAcc(MaxView,V
 
 accept_cnt(Master,View,Update,Count) :- accept(Master,View,Update,Peer), AggCountAcc(Count, Peer).
 
-commit(Master, View, Update)    :-  accept_cnt(Master,View,Update,NumOfAcc), total_cnt(Master,NumOfNodes), quorum(Master,View), fGt(NumOfAcc,fDiv(NumOfNodes,2)).
+commit(Master, View, Update)    :-  accept_cnt(Master,View,Update,NumOfAcc), total_cnt(Master,NumOfNodes), quorum(Master,View), fDiv(half,NumOfNodes,2), fGt(NumOfAcc,half).
 
 
 }
-
 
 
 
