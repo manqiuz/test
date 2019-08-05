@@ -1,0 +1,133 @@
+Input{
+  peers(Node,Node),
+  prepare(Node, Int, Node),
+  pre_vote(Node, Int, Int),
+  max_id(Node,Id),
+  
+  }
+
+Invented{
+  total_cnt(Node,Int),
+  AggCountPeer(Int, Node),
+  promise_cnt(Node,Int,Int),
+  AggCountPromise(Int, Node),
+  quorum(Master,Int),
+  AggMaxPromise(Int,Int),
+  max_old_view(Node,Int,Int),
+  propose(Node, Int, Int, Node),
+  accept(Node,Int,Int,Node),
+  AggCountAcc(Int, Node),
+  accept_cnt(Node,Int,Int,Int)
+  promise(Node,Int,Int,Int,Node)
+
+
+}
+
+Output{
+  commit(Master, View, Update)
+}
+
+Aggregate {
+AggCountPeer(Int, Node),
+AggMaxPromise(Int,Int),
+AggCountPromise(Int, Node),
+AggCountAcc(Int, Node),
+}
+
+Functor {
+fDiv(Int, Int)
+    }
+Filter {
+fGt(Int, Int),
+fGtEq((Int, Int)
+}
+
+Constants {
+Update{someupdate}
+}
+
+Examples{
+EDB{
+  peers(a,b),
+  peers(a,c),
+  peers(b,a),
+  peers(b,c),
+  peers(c,a),
+  peers(c,b),
+  prepare(a, 2, b),
+  prepare(a, 3, c),
+  prepare(b, 1, a),
+  prepare(b, 3, c),
+  prepare(c, 1, a),
+  prepare(c, 2, b),
+  max_pre_vote(a, -1),
+  max_pre_vote(b, -1),
+  max_pre_vote(c, -1),
+  max_id(a,-1),
+  max_id(b,-1),
+  max_id(c,-1)
+ 
+
+
+}
+IDB{
+commit(c, 3, "someupdate") 
+
+
+}
+
+EDB{
+
+
+
+}
+IDB{
+
+
+
+}
+}
+
+
+
+
+
+Oracle {
+
+total_cnt(Node,Count) :- peers(node,Peer),  AggCountPeer(Count, Peer).
+
+promise(Peer,View,OldView,Node) :- prepare(Node, View, Peer), max_id(Node,Id), max_pre_vote(Node, OldView),fGt(View, Id).
+
+id(Node,View) :- prepare(Node, View, Peer), max_id(Node,Id), fGtEq(View, Id).
+
+max_id(Node,MaxView) :- id(Node,View), AggMaxId(MaxView,View).
+
+promise_cnt(Peer,View,Count) :- promise(Peer,View,OldView,Node), AggCountPromise(Count, Node).
+
+quorum(Master,View) :- promise_cnt(Master,View,NumOfPromises), total_cnt(Master,NumOfNodes), fGt(NumOfPromise,fDiv(NumOfNodes,2)).
+
+propose(Peer, View, "someupdate", Master) :- promise(Master,View,OldUpdate,MaxOldView,Node), quorum(Master,View).
+
+accept(Master,View,Update,Peer) :- propose(Peer, View, Update, Master), max_id(Peer,Id), fGtEq(View, Id).
+
+pre_vote(Peer, View, Update) :- propose(Peer, View, Update, Master), max_id(Peer,Id), fGtEq(View, Id).
+
+max_pre_vote(Peer, MaxView) :- pre_vote(Peer, View, Update), AggMaxAcc(MaxView,View).
+
+accept_cnt(Master,View,Update,Count) :- accept(Master,View,Update,Peer), AggCountAcc(Count, Peer).
+
+commit(Master, View, Update)    :-  accept_cnt(Master,View,Update,NumOfAcc), total_cnt(Master,NumOfNodes), quorum(Master,View), fGt(NumOfAcc,fDiv(NumOfNodes,2)).
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
