@@ -1,0 +1,25 @@
+case class FunctorDivide(outputVariable: Variable, inputParameters: Seq[Parameter]) extends Functor{
+  require(inputParameters.length==2, s"wrong number of variables, only takes 2.")
+  override val name: String = "fDiv"
+  override def toString: String = s"$outputVariable=${inputParameters(0)}/${inputParameters(1)}"
+  override def sanityCheck(head: Literal, body: Set[Literal]): Unit = {
+  }
+  override def apply(arguments: Seq[Constant]): Constant = {
+    require(arguments.length==2, s"wrong number of arguments, only takes 2.")
+    /* Use string as Constant name. On evaluation, convert back from string to int... */
+    val intArgs: Seq[Int] = arguments.map(_.name.toString.toInt)
+    val result: Float = intArgs.apply(0).toFloat/intArgs.apply(1).toFloat
+    val output: Int =result.toInt
+    require((output >= 0 ) || output==Int.MaxValue)
+
+    SimpleConstant(output.toString, outputVariable.domain)
+  }
+  override def normalize(renaming: Map[Variable,Variable]): Functor = {
+    FunctorDivide(outputVariable,renamedParameters(renaming))
+  }
+
+}
+object FunctorDivide {
+  def construct(outputVariable: Variable, inputParameters: Seq[Parameter]): FunctorDivide  =
+    FunctorDivide(outputVariable,inputParameters)
+}
