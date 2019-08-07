@@ -18,7 +18,7 @@ Invented{
   accept(Node,Int,Int,Node),
   AggCountAcc(Int, Node),
   accept_cnt(Node,Int,Int,Int)
-  promise(Node,Int,Int,Int,Node)
+  promise(Node,Int,Node)
 
 
 }
@@ -87,17 +87,17 @@ Oracle {
 
 total_cnt(Node,Count) :- peers(node,Peer),  AggCountPeer(Count, Peer).
 
-promise(Peer,View,OldView,Node) :- prepare(Node, View, Peer), max_id(Node,Id), max_pre_vote(Node, OldView),fGt(View, Id).
+promise(Peer,View,Node) :- prepare(Node, View, Peer), max_id(Node,Id), fGt(View, Id).
 
 id(Node,View) :- prepare(Node, View, Peer), max_id(Node,Id), fGtEq(View, Id).
 
 max_id(Node,MaxView) :- id(Node,View), AggMaxId(MaxView,View).
 
-promise_cnt(Peer,View,Count) :- promise(Peer,View,OldView,Node), AggCountPromise(Count, Node).
+promise_cnt(Peer,View,Count) :- promise(Peer,View,Node), AggCountPromise(Count, Node).
 
 quorum(Master,View) :- promise_cnt(Master,View,NumOfPromises), total_cnt(Master,NumOfNodes), fDiv(half,NumOfNodes,2), fGt(NumOfPromise,half).
 
-propose(Peer, View, "someupdate", Master) :- promise(Master,View,OldUpdate,MaxOldView,Node), quorum(Master,View).
+propose(Peer, View, "someupdate", Master) :- promise(Master,View,Node), quorum(Master,View).
 
 accept(Master,View,Update,Peer) :- propose(Peer, View, Update, Master), max_id(Peer,Id), fGtEq(View, Id).
 
