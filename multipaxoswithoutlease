@@ -2,7 +2,7 @@ Input{
   peers(Node,Node),
   prepare(Node, Int, Node),
   pre_vote(Node, Int, Int),
-  max_id(Node,Id),
+  max_id(Node,Id)
 
   }
 
@@ -43,7 +43,7 @@ fGtEq((Int, Int)
 }
 
 Constants {
-Update{someupdate}
+Update{someupdate, none}
 }
 
 Examples{
@@ -63,9 +63,9 @@ EDB{
   max_pre_vote(a, -1),
   max_pre_vote(b, -1),
   max_pre_vote(c, -1),
-  max_id(a,-1),
-  max_id(b,-1),
-  max_id(c,-1)
+  max_id(a,-1,"none),
+  max_id(b,-1,"none"),
+  max_id(c,-1,"none")
 
 
 
@@ -111,13 +111,3 @@ commit(Master, View, Update)    :-  accept_cnt(Master,View,Update,NumOfAcc), tot
 
 
 }
-
-
-
-
-
-
-
-
-
-
