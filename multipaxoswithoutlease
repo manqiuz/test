@@ -50,22 +50,36 @@ Examples{
 EDB{
   peers(a,b),
   peers(a,c),
+  peers(a,d),
   peers(b,a),
   peers(b,c),
+  peers(b,d),
   peers(c,a),
   peers(c,b),
+  peers(c,d),
+  peers(d,a),
+  peers(d,b),  
+  peers(d,c),  
   prepare(a, 2, b),
   prepare(a, 3, c),
+  prepare(a, 4, d),
   prepare(b, 1, a),
   prepare(b, 3, c),
+  prepare(b, 4, d),
   prepare(c, 1, a),
   prepare(c, 2, b),
+  prepare(c, 4, d),
+  prepare(d, 1, a),
+  prepare(d, 2, b),
+  prepare(d, 3, 3),
   max_pre_vote(a, -1),
   max_pre_vote(b, -1),
   max_pre_vote(c, -1),
+  max_pre_vote(d, -1),
   max_id(a,-1,"none),
   max_id(b,-1,"none"),
-  max_id(c,-1,"none")
+  max_id(c,-1,"none"),
+  max_id(d,-1,"none")
 
 
 
