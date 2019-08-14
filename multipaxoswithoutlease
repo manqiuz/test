@@ -1,53 +1,48 @@
-Input{
+Input {
   peers(Node,Node),
-  prepare(Node, Int, Node),
-  pre_vote(Node, Int, Int),
-  max_id(Node,Id)
-
-  }
-
-Invented{
-  total_cnt(Node,Int),
-  AggCountPeer(Int, Node),
-  promise_cnt(Node,Int,Int),
-  AggCountPromise(Int, Node),
-  quorum(Master,Int),
-  AggMaxPromise(Int,Int),
-  max_old_view(Node,Int,Int),
-  propose(Node, Int, Int, Node),
-  accept(Node,Int,Int,Node),
-  AggCountAcc(Int, Node),
-  accept_cnt(Node,Int,Int,Int)
-  promise(Node,Int,Node)
-
-
+  prepare(Node, Int, Node)
 }
 
-Output{
-  commit(Master, View, Update)
+Invented {
+  propose(Node, Int, Update, Node),
+  accept(Node,Int,Update,Node),
+  promise(Node,Int,Node),
+  promisecnt(Node,Int,Int),
+  acceptcnt(Node, Int),
+  totalcnt(Node,Int),
+  maxview(Node, Int),
+  AggMax(Int, Int),
+  AggCountPeer(Int, Node),
+  AggCountPromise(Int, Node),
+  AggCountAcc(Int, Node)
+}
+
+Output {
+  quorum(Node,Int),
+  commit(Node, Int, Update)
 }
 
 Aggregate {
-AggCountPeer(Int, Node),
-AggMaxPromise(Int,Int),
-AggCountPromise(Int, Node),
-AggCountAcc(Int, Node),
+  AggMax(Int, Int),
+  AggCountPeer(Int, Node),
+  AggCountPromise(Int, Node),
+  AggCountAcc(Int, Node)
 }
 
 Functor {
-fDiv(Int, Int, Int)
+  fDiv(Int, Int, Int)
     }
 Filter {
-fGt(Int, Int),
-fGtEq((Int, Int)
+  fGt(Int, Int),
+  fGE(Int, Int)
 }
 
 Constants {
-Update{someupdate, none}
+  Update {msg, none}
 }
 
-Examples{
-EDB{
+Examples {
+EDB {
   peers(a,b),
   peers(a,c),
   peers(a,d),
@@ -58,8 +53,8 @@ EDB{
   peers(c,b),
   peers(c,d),
   peers(d,a),
-  peers(d,b),  
-  peers(d,c),  
+  peers(d,b),
+  peers(d,c),
   prepare(a, 2, b),
   prepare(a, 3, c),
   prepare(a, 4, d),
@@ -71,57 +66,37 @@ EDB{
   prepare(c, 4, d),
   prepare(d, 1, a),
   prepare(d, 2, b),
-  prepare(d, 3, 3),
-  max_pre_vote(a, -1),
-  max_pre_vote(b, -1),
-  max_pre_vote(c, -1),
-  max_pre_vote(d, -1),
-  max_id(a,-1,"none),
-  max_id(b,-1,"none"),
-  max_id(c,-1,"none"),
-  max_id(d,-1,"none")
-
-
-
+  prepare(d, 3, c)
 }
-IDB{
-commit(c, 3, "someupdate")
-
-
+IDB {
+  quorum(d,4),
+  commit(d,4,msg)
 }
-
-
 }
 
 
 
-
+Rules {
+}
 
 Oracle {
+  totalcnt(Node, Count) :- peers(Node,Peer), AggCountPeer(Count, Peer).
 
-total_cnt(Node,Count) :- peers(node,Peer),  AggCountPeer(Count, Peer).
+  maxview(Acceptor, MaxView) :- prepare(Acceptor, View, Sender), AggMax(MaxView, View).
 
-promise(Peer,View,Node) :- prepare(Node, View, Peer), max_id(Node,Id), fGt(View, Id).
+  promise(Sender, View, Acceptor) :- maxview(Acceptor, View), prepare(Acceptor, View, Sender).
 
-id(Node,View) :- prepare(Node, View, Peer), max_id(Node,Id), fGtEq(View, Id).
+  promisecnt(Peer,View,Count) :- promise(Peer,View,Node), AggCountPromise(Count, Peer).
 
-max_id(Node,MaxView) :- id(Node,View), AggMaxId(MaxView,View).
+  quorum(Master,View) :- promisecnt(Master,View,NumOfPromise), totalcnt(Master,NumOfNodes), fDiv(half,NumOfNodes,2), fGt(NumOfPromise,half).
 
-promise_cnt(Peer,View,Count) :- promise(Peer,View,Node), AggCountPromise(Count, Node).
+  propose(Peer, View, "msg", Master) :- peers(Master,Peer), quorum(Master,View).
 
-quorum(Master,View) :- promise_cnt(Master,View,NumOfPromises), total_cnt(Master,NumOfNodes), fDiv(half,NumOfNodes,2), fGt(NumOfPromise,half).
+  accept(Master,View,Update,Peer) :- propose(Peer, View, Update, Master), maxview(Peer,MaxView), fGE(View, MaxView).
 
-propose(Peer, View, "someupdate", Master) :- promise(Master,View,Node), quorum(Master,View).
+  acceptcnt(Master,Count) :- accept(Master,View,Update,Peer), AggCountAcc(Count, Peer).
 
-accept(Master,View,Update,Peer) :- propose(Peer, View, Update, Master), max_id(Peer,Id), fGtEq(View, Id).
-
-pre_vote(Peer, View, Update) :- propose(Peer, View, Update, Master), max_id(Peer,Id), fGtEq(View, Id).
-
-max_pre_vote(Peer, MaxView) :- pre_vote(Peer, View, Update), AggMaxAcc(MaxView,View).
-
-accept_cnt(Master,View,Update,Count) :- accept(Master,View,Update,Peer), AggCountAcc(Count, Peer).
-
-commit(Master, View, Update)    :-  accept_cnt(Master,View,Update,NumOfAcc), total_cnt(Master,NumOfNodes), quorum(Master,View), fDiv(half,NumOfNodes,2), fGt(NumOfAcc,half).
-
-
+  commit(Master, View, Update) :-  acceptcnt(Master, NumOfAcc), accept(Master,View,Update,Peer), totalcnt(Master,NumOfNodes), quorum(Master,View), fDiv(half,NumOfNodes,2), fGt(NumOfAcc,half).
 }
+
+
